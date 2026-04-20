@@ -106,7 +106,7 @@ function drawExternality(ctx, W, H, vars) {
   const P_msb_0 = evalExpr(MSB, varName, 0);
   const P_max = P_msb_0 * 1.2;
 
-  const mx = 80, my = 40, gw = W - mx - 30, gh = H - my - 60;
+  const mx = 100, my = 40, gw = W - mx - 30, gh = H - my - 60;
   const toX = (q) => mx + (q / Q_max) * gw;
   const toY = (p) => my + gh - (p / P_max) * gh;
 
@@ -173,8 +173,42 @@ function drawExternality(ctx, W, H, vars) {
   ctx.fillText(R(Q_c, 1), toX(Q_c) - 8, toY(0) + 14);
   ctx.fillText("Qe", toX(Q_e) - 6, toY(0) + 26);
   ctx.fillText("Qc", toX(Q_c) - 6, toY(0) + 26);
-  ctx.fillText(R(P_e, 1), 10, toY(P_e) + 4);
-  ctx.fillText(R(P_c, 1), 10, toY(P_c) + 4);
+
+  // P_e and P_c labels on the y-axis at the equilibrium price levels
+  ctx.font = "bold 10px 'DM Mono', monospace";
+  ctx.fillStyle = "#222";
+  ctx.fillText(`Pe = ${R(P_e, 1)}`, 10, toY(P_e) + 4);
+  ctx.fillText(`Pc = ${R(P_c, 1)}`, 10, toY(P_c) + 4);
+
+  // y-intercept labels for MSB, MSC, MPC — colored to match each curve.
+  // If two intercepts are too close to label cleanly, nudge the later ones up.
+  const P_msc_0 = evalExpr(MSC, varName, 0);
+  const P_mpc_0 = evalExpr(MPC, varName, 0);
+  const intercepts = [
+    { name: "MSB", val: P_msb_0, color: "#7b5ea7" },
+    { name: "MSC", val: P_msc_0, color: "#c0392b" },
+    { name: "MPC", val: P_mpc_0, color: "#4a7fb5" },
+  ].sort((a, b) => a.val - b.val); // label bottom-up so nudges push upward
+
+  const pxGap = 14; // min vertical px between two intercept labels
+  const usedPx = [];
+  ctx.font = "bold 10px 'DM Mono', monospace";
+  intercepts.forEach(({ name, val, color }) => {
+    // dot on the y-axis
+    ctx.fillStyle = "#222";
+    ctx.beginPath(); ctx.arc(toX(0), toY(val), 3, 0, Math.PI * 2); ctx.fill();
+
+    // place label; nudge up if too close to an already-placed one
+    let py = toY(val);
+    usedPx.forEach(prev => {
+      if (Math.abs(py - prev) < pxGap) py = prev - pxGap;
+    });
+    usedPx.push(py);
+
+    ctx.fillStyle = color;
+    const text = `${name} = ${R(val, 1)}`;
+    ctx.fillText(text, mx - ctx.measureText(text).width - 8, py + 4);
+  });
 
   ctx.font = "bold 13px 'DM Mono', monospace";
   ctx.fillStyle = "#222";
