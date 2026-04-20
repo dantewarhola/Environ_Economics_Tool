@@ -174,11 +174,13 @@ function drawExternality(ctx, W, H, vars) {
   ctx.fillText("Qe", toX(Q_e) - 6, toY(0) + 26);
   ctx.fillText("Qc", toX(Q_c) - 6, toY(0) + 26);
 
-  // P_e and P_c labels on the y-axis at the equilibrium price levels
-  ctx.font = "bold 10px 'DM Mono', monospace";
-  ctx.fillStyle = "#222";
-  ctx.fillText(`Pe = ${R(P_e, 1)}`, 10, toY(P_e) + 4);
-  ctx.fillText(`Pc = ${R(P_c, 1)}`, 10, toY(P_c) + 4);
+  // P_e and P_c labels on the y-axis at the equilibrium price levels — grey, like Qe/Qc
+  ctx.font = "10px 'DM Mono', monospace";
+  ctx.fillStyle = "#555";
+  const peText = `Pe = ${R(P_e, 1)}`;
+  const pcText = `Pc = ${R(P_c, 1)}`;
+  ctx.fillText(peText, mx - ctx.measureText(peText).width - 8, toY(P_e) + 4);
+  ctx.fillText(pcText, mx - ctx.measureText(pcText).width - 8, toY(P_c) + 4);
 
   // y-intercept labels for MSB, MSC, MPC — colored to match each curve.
   // If two intercepts are too close to label cleanly, nudge the later ones up.
