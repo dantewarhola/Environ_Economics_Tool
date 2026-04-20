@@ -20,7 +20,7 @@ function evalExpr(exprStr, varName, value) {
 
 function findVariable(exprStr) {
   const parsed = parseExpr(exprStr);
-  const vars = parsed.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+  const vars = parsed.match(/[A-Za-z_]+/g) || [];
   const reserved = new Set(["Math", "PI", "E", "abs", "sqrt", "pow", "log", "exp", "sin", "cos", "tan", "max", "min", "round", "floor", "ceil", "return"]);
   const unique = [...new Set(vars.filter(v => !reserved.has(v)))];
   return unique[0] || "Q";
@@ -62,14 +62,10 @@ function integrate(exprStr, varName, lo, hi, n = 1000) {
 function solveTwoEq(mac1Str, mac2Str, var1, var2, total) {
   const f = (a1) => evalExpr(mac1Str, var1, a1) - evalExpr(mac2Str, var2, total - a1);
   let lo = 0, hi = total;
-  let flo = f(lo);
   for (let i = 0; i < 100; i++) {
     const mid = (lo + hi) / 2;
-    const fm = f(mid);
-    if (Math.abs(fm) < 1e-10) { lo = hi = mid; break; }
-    // keep the subinterval that brackets the sign change
-    if (flo * fm < 0) { hi = mid; }
-    else { lo = mid; flo = fm; }
+    if (f(mid) < 0) lo = mid;
+    else hi = mid;
   }
   const a1 = (lo + hi) / 2;
   return { [var1]: a1, [var2]: total - a1 };
@@ -504,7 +500,7 @@ function ResultRow({ label, value }) {
 
 // ─── Externality Panel ───
 function ExternalityPanel() {
-  const [vars, setVars] = useState({ MSB: "200-2Q", MPC: "20+2Q", MEC: "2Q", MSC: "", MAC_1: "", MAC_2: "", TAC_1: "", TAC_2: "" });
+  const [vars, setVars] = useState({ MSB: "", MPC: "", MEC: "", MSC: "", MAC_1: "", MAC_2: "", TAC_1: "", TAC_2: "" });
   const [results, setResults] = useState(null);
   const [graphFn, setGraphFn] = useState(null);
   const [mode, setMode] = useState(null);
@@ -512,12 +508,15 @@ function ExternalityPanel() {
   const [evalVal, setEvalVal] = useState("");
   const [evalResult, setEvalResult] = useState(null);
   const [totalAbatement, setTotalAbatement] = useState("");
+  const [tsbLower, setTsbLower] = useState("");
+  const [tsbUpper, setTsbUpper] = useState("");
 
   const set = (k) => (v) => setVars(prev => ({ ...prev, [k]: v }));
 
   const handleJsonLoad = (data) => {
     const source = data.variables || data;
-    const newVars = { ...vars };
+    // start from blank slate so old values don't linger across uploads
+    const newVars = { MSB: "", MPC: "", MEC: "", MSC: "", MAC_1: "", MAC_2: "", TAC_1: "", TAC_2: "" };
     for (const [key, val] of Object.entries(source)) {
       if (val === "" || val === undefined || val === null) continue;
       const strVal = String(val);
@@ -532,6 +531,16 @@ function ExternalityPanel() {
       }
     }
     setVars(newVars);
+    // reset auxiliary inputs + any stale result/graph
+    setTotalAbatement(source.total_abatement !== undefined ? String(source.total_abatement) : "");
+    setTsbLower(source.tsb_lower !== undefined ? String(source.tsb_lower) : "");
+    setTsbUpper(source.tsb_upper !== undefined ? String(source.tsb_upper) : "");
+    setEvalTarget("");
+    setEvalVal("");
+    setEvalResult(null);
+    setResults(null);
+    setGraphFn(null);
+    setMode(null);
   };
 
   const derive = (v) => {
@@ -540,6 +549,30 @@ function ExternalityPanel() {
     if (nv.MSC && nv.MEC && !nv.MPC) nv.MPC = `(${nv.MSC})-(${nv.MEC})`;
     if (nv.MSC && nv.MPC && !nv.MEC) nv.MEC = `(${nv.MSC})-(${nv.MPC})`;
     return nv;
+  };
+
+  // Figure out which cost variable is missing and display the derived expression.
+  // If the user has entered MPC and MSC (but not MEC), this computes MEC = MSC - MPC
+  // and likewise for MSC = MPC + MEC, or MPC = MSC - MEC.
+  const computeDerive = () => {
+    const dv = derive(vars);
+    const items = [];
+    let derivedKey = null;
+    if (!vars.MSC && dv.MSC)      { items.push(["MSC (derived)", dv.MSC], ["formula", "MPC + MEC"]); derivedKey = "MSC"; }
+    else if (!vars.MPC && dv.MPC) { items.push(["MPC (derived)", dv.MPC], ["formula", "MSC - MEC"]); derivedKey = "MPC"; }
+    else if (!vars.MEC && dv.MEC) { items.push(["MEC (derived)", dv.MEC], ["formula", "MSC - MPC"]); derivedKey = "MEC"; }
+    else {
+      // nothing to derive — tell the user what's needed
+      const filled = ["MPC","MEC","MSC"].filter(k => vars[k]);
+      setResults({ title: "Derive Missing Variable",
+        items: [["Status", filled.length === 3 ? "All three already filled in" : `Need two of MPC / MEC / MSC (you have ${filled.length})`]] });
+      setMode("derive");
+      return;
+    }
+    // also fill the form field so the user can see the new value
+    setVars(prev => ({ ...prev, [derivedKey]: dv[derivedKey] }));
+    setResults({ title: "Derive Missing Variable", items });
+    setMode("derive");
   };
 
   const computeCompetitive = () => {
@@ -620,10 +653,10 @@ function ExternalityPanel() {
 
   const computeTSB = () => {
     const dv = derive(vars);
-    if (!dv.MSB || !evalVal || !totalAbatement) return;
+    if (!dv.MSB || tsbLower === "" || tsbUpper === "") return;
     const vn = findVariable(dv.MSB);
-    const lo = parseFloat(evalVal);
-    const hi = parseFloat(totalAbatement);
+    const lo = parseFloat(tsbLower);
+    const hi = parseFloat(tsbUpper);
     const tsb = integrate(dv.MSB, vn, lo, hi);
     setResults({ title: "Total Social Benefit", items: [["TSB", R(tsb)], ["From", lo], ["To", hi]] });
     setMode("tsb");
@@ -637,12 +670,12 @@ function ExternalityPanel() {
     const total = parseFloat(totalAbatement);
     const sol = solveTwoEq(dv.MAC_1, dv.MAC_2, v1, v2, total);
     const equal = total / 2;
-    // TAC_i and MAC_i refer to the same firm, so evaluate TAC_i against v_i
-    // (not a freshly-detected name — that breaks silently if letters differ)
-    const tac1_opt = evalExpr(dv.TAC_1, v1, sol[v1]);
-    const tac2_opt = evalExpr(dv.TAC_2, v2, sol[v2]);
-    const tac1_eq = evalExpr(dv.TAC_1, v1, equal);
-    const tac2_eq = evalExpr(dv.TAC_2, v2, equal);
+    const tv1 = findVariable(dv.TAC_1);
+    const tv2 = findVariable(dv.TAC_2);
+    const tac1_opt = evalExpr(dv.TAC_1, tv1, sol[v1]);
+    const tac2_opt = evalExpr(dv.TAC_2, tv2, sol[v2]);
+    const tac1_eq = evalExpr(dv.TAC_1, tv1, equal);
+    const tac2_eq = evalExpr(dv.TAC_2, tv2, equal);
     const withT = tac1_opt + tac2_opt;
     const withoutT = tac1_eq + tac2_eq;
     setResults({
@@ -664,26 +697,31 @@ function ExternalityPanel() {
       <Card title="Equations">
         <JsonUpload label="Upload preload.json (Externality)" onLoad={handleJsonLoad} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-          <Field label="MSB (demand)" value={vars.MSB} onChange={set("MSB")} placeholder="200-2Q" />
-          <Field label="MPC (supply)" value={vars.MPC} onChange={set("MPC")} placeholder="20+2Q" />
-          <Field label="MEC (externality)" value={vars.MEC} onChange={set("MEC")} placeholder="2Q" />
-          <Field label="MSC (leave blank to derive)" value={vars.MSC} onChange={set("MSC")} placeholder="auto" />
+          <Field label="MSB (demand)" value={vars.MSB} onChange={set("MSB")} placeholder="e.g. 200-2Q" />
+          <Field label="MPC (supply)" value={vars.MPC} onChange={set("MPC")} placeholder="e.g. 20+2Q" />
+          <Field label="MEC (externality)" value={vars.MEC} onChange={set("MEC")} placeholder="e.g. 2Q" />
+          <Field label="MSC" value={vars.MSC} onChange={set("MSC")} placeholder="auto-derives from MPC+MEC" />
           <Field label="MAC_1" value={vars.MAC_1} onChange={set("MAC_1")} placeholder="optional" />
           <Field label="MAC_2" value={vars.MAC_2} onChange={set("MAC_2")} placeholder="optional" />
           <Field label="TAC_1" value={vars.TAC_1} onChange={set("TAC_1")} placeholder="optional" />
           <Field label="TAC_2" value={vars.TAC_2} onChange={set("TAC_2")} placeholder="optional" />
         </div>
-        <Field label="Total Abatement Standard (for cost-effective, TSB, savings)" value={totalAbatement} onChange={setTotalAbatement} placeholder="e.g. 100" />
+        <Field label="Total Abatement Standard (for Cost Effective / Cost Savings)" value={totalAbatement} onChange={setTotalAbatement} placeholder="e.g. 100" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Field label="TSB lower bound" value={tsbLower} onChange={setTsbLower} placeholder="e.g. 20" />
+          <Field label="TSB upper bound" value={tsbUpper} onChange={setTsbUpper} placeholder="e.g. 30" />
+        </div>
       </Card>
 
       <Card title="Operations">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          <Btn onClick={computeDerive} secondary disabled={["MPC","MEC","MSC"].filter(k => vars[k]).length < 2}>Derive Missing (MCE / MSC / MPC)</Btn>
           <Btn onClick={computeCompetitive} disabled={!allVars.MSB || !allVars.MPC}>Competitive EQ</Btn>
           <Btn onClick={computeEfficient} disabled={!allVars.MSB || !allVars.MSC}>Efficient EQ</Btn>
           <Btn onClick={computePigouvian} disabled={!allVars.MEC || !allVars.MSB || !allVars.MSC}>Pigouvian Tax</Btn>
           <Btn onClick={computeFullSolve} disabled={!allVars.MSB || !allVars.MPC || !allVars.MSC || !allVars.MEC}>Full Solve + Graph</Btn>
           <Btn onClick={computeCostEffective} secondary disabled={!allVars.MAC_1 || !allVars.MAC_2 || !totalAbatement}>Cost Effective</Btn>
-          <Btn onClick={computeTSB} secondary disabled={!allVars.MSB || !evalVal || !totalAbatement}>TSB</Btn>
+          <Btn onClick={computeTSB} secondary disabled={!allVars.MSB || tsbLower === "" || tsbUpper === ""}>TSB</Btn>
           <Btn onClick={computeCostSavings} secondary disabled={!allVars.MAC_1 || !allVars.MAC_2 || !allVars.TAC_1 || !allVars.TAC_2 || !totalAbatement}>Cost Savings</Btn>
         </div>
       </Card>
@@ -724,7 +762,7 @@ function ExternalityPanel() {
 
 // ─── Abatement Panel ───
 function AbatementPanel() {
-  const [msc, setMsc] = useState("4+0.75A");
+  const [msc, setMsc] = useState("");
   const [aOld, setAOld] = useState("");
   const [aNew, setANew] = useState("");
   const [results, setResults] = useState(null);
@@ -733,7 +771,13 @@ function AbatementPanel() {
 
   const handleJsonLoad = (data) => {
     const source = data.variables || data;
-    if (source.MSC) setMsc(String(source.MSC));
+    // reset all fields first so old values don't linger
+    setMsc(source.MSC ? String(source.MSC) : "");
+    setAOld(source.A_old !== undefined ? String(source.A_old) : "");
+    setANew(source.A_new !== undefined ? String(source.A_new) : "");
+    setResults(null);
+    setGraphFn(null);
+    setGraphType(null);
   };
 
   const compute = () => {
@@ -875,18 +919,21 @@ function AbatementPanel() {
 // ─── Time Value Panel ───
 function TimePanel() {
   const [years, setYears] = useState([
-    { year: 2011, nominal: 850, cpi: "", nrb: "" },
-    { year: 2012, nominal: 1000, cpi: "", nrb: "" },
+    { year: "", nominal: "", cpi: "", nrb: "" },
+    { year: "", nominal: "", cpi: "", nrb: "" },
   ]);
-  const [discountRate, setDiscountRate] = useState("0.05");
+  const [discountRate, setDiscountRate] = useState("");
   const [baseYear, setBaseYear] = useState("");
   const [results, setResults] = useState(null);
   const [mode, setMode] = useState(null);
 
   const handleJsonLoad = (data) => {
     const source = data.variables || data;
-    if (source.discount_rate) setDiscountRate(String(source.discount_rate));
-    if (source.start_year) setBaseYear(String(source.start_year));
+    // reset first so old values don't linger across uploads
+    setDiscountRate(source.discount_rate !== undefined ? String(source.discount_rate) : "");
+    setBaseYear(source.start_year !== undefined ? String(source.start_year) : "");
+    setResults(null);
+    setMode(null);
 
     const yearData = data.years || {};
     if (Object.keys(yearData).length > 0) {
