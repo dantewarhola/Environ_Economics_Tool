@@ -1,8 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 
 // ─── Sympy-lite: tiny symbolic math via math.js-style eval ───
-// We'll use a simple approach: parse equations with a variable, evaluate numerically,
-// and use numerical methods for solving. For integration we use Simpson's rule.
 
 function parseExpr(str) {
   if (!str) return null;
@@ -29,11 +27,9 @@ function findVariable(exprStr) {
 }
 
 function solveEquation(expr1Str, expr2Str, varName, lo = -1000, hi = 10000) {
-  // Bisection method to solve expr1 = expr2
   const f = (x) => evalExpr(expr1Str, varName, x) - evalExpr(expr2Str, varName, x);
   let a = lo, b = hi;
   let fa = f(a), fb = f(b);
-  // Find sign change
   if (fa * fb > 0) {
     for (let x = lo; x <= hi; x += 0.5) {
       if (f(x) * f(x + 0.5) <= 0) {
@@ -64,8 +60,6 @@ function integrate(exprStr, varName, lo, hi, n = 1000) {
 }
 
 function solveTwoEq(mac1Str, mac2Str, var1, var2, total) {
-  // MAC1(a1) = MAC2(a2), a1 + a2 = total
-  // => MAC1(a1) = MAC2(total - a1)
   const f = (a1) => evalExpr(mac1Str, var1, a1) - evalExpr(mac2Str, var2, total - a1);
   let lo = 0, hi = total;
   for (let i = 0; i < 100; i++) {
@@ -77,7 +71,6 @@ function solveTwoEq(mac1Str, mac2Str, var1, var2, total) {
   return { [var1]: a1, [var2]: total - a1 };
 }
 
-// ─── Round helper ───
 const R = (v, d = 4) => Math.round(v * 10 ** d) / 10 ** d;
 
 // ─── Canvas Graph Component ───
@@ -99,7 +92,7 @@ function GraphCanvas({ drawFn, width = 700, height = 450 }) {
   return <canvas ref={canvasRef} style={{ maxWidth: "100%", borderRadius: 8 }} />;
 }
 
-// ─── Drawing functions ───
+// ─── Drawing: Externality ───
 function drawExternality(ctx, W, H, vars) {
   const { MSB, MPC, MSC, MEC } = vars;
   const varName = findVariable(MSB);
@@ -120,28 +113,21 @@ function drawExternality(ctx, W, H, vars) {
   ctx.fillStyle = "#faf9f6";
   ctx.fillRect(0, 0, W, H);
 
-  // axes
-  ctx.strokeStyle = "#222";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(mx, my); ctx.lineTo(mx, my + gh); ctx.lineTo(mx + gw, my + gh);
-  ctx.stroke();
+  ctx.strokeStyle = "#222"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx, my + gh); ctx.lineTo(mx + gw, my + gh); ctx.stroke();
 
   ctx.font = "bold 13px 'DM Mono', monospace";
   ctx.fillStyle = "#222";
   ctx.fillText("Q", mx + gw / 2, H - 8);
   ctx.fillText("P", 12, my + gh / 2);
 
-  // curves
   const drawCurve = (exprStr, color, label) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i <= 200; i++) {
       const q = (i / 200) * Q_max;
       const p = evalExpr(exprStr, varName, q);
-      const x = toX(q), y = toY(p);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      if (i === 0) ctx.moveTo(toX(q), toY(p)); else ctx.lineTo(toX(q), toY(p));
     }
     ctx.stroke();
     const qEnd = Q_max * 0.92;
@@ -155,7 +141,6 @@ function drawExternality(ctx, W, H, vars) {
   drawCurve(MSB, "#7b5ea7", "D = MSB");
   drawCurve(MSC, "#c0392b", "MSC");
 
-  // shaded triangles
   const Wx = toX(Q_e), Wy = toY(P_e);
   const Xx = toX(Q_c), Xy = toY(evalExpr(MSC, varName, Q_c));
   const Yx = toX(Q_c), Yy = toY(P_c);
@@ -168,17 +153,13 @@ function drawExternality(ctx, W, H, vars) {
   ctx.beginPath(); ctx.moveTo(Wx, Wy); ctx.lineTo(Zx, Zy); ctx.lineTo(Yx, Yy); ctx.closePath(); ctx.fill();
   ctx.globalAlpha = 1;
 
-  // dashed lines
-  ctx.setLineDash([5, 4]);
-  ctx.strokeStyle = "#999";
-  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
   [[Q_e, P_e], [Q_c, P_c]].forEach(([q, p]) => {
     ctx.beginPath(); ctx.moveTo(toX(q), toY(0)); ctx.lineTo(toX(q), toY(p)); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(toX(0), toY(p)); ctx.lineTo(toX(q), toY(p)); ctx.stroke();
   });
   ctx.setLineDash([]);
 
-  // points
   [[Wx, Wy, "W"], [Xx, Xy, "X"], [Yx, Yy, "Y"], [Zx, Zy, "Z"]].forEach(([x, y, l]) => {
     ctx.fillStyle = "#222";
     ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
@@ -186,7 +167,6 @@ function drawExternality(ctx, W, H, vars) {
     ctx.fillText(l, x + 6, y - 6);
   });
 
-  // axis values
   ctx.font = "10px 'DM Mono', monospace";
   ctx.fillStyle = "#555";
   ctx.fillText(R(Q_e, 1), toX(Q_e) - 8, toY(0) + 14);
@@ -199,10 +179,9 @@ function drawExternality(ctx, W, H, vars) {
   ctx.font = "bold 13px 'DM Mono', monospace";
   ctx.fillStyle = "#222";
   ctx.fillText("Negative Externality", W / 2 - 80, 22);
-
-  return { Q_c: R(Q_c), P_c: R(P_c), Q_e: R(Q_e), P_e: R(P_e) };
 }
 
+// ─── Drawing: MSC with IC label INSIDE the shaded area ───
 function drawMSC(ctx, W, H, mscStr, aOld, aNew) {
   const varName = findVariable(mscStr);
   const mscOld = evalExpr(mscStr, varName, aOld);
@@ -235,7 +214,7 @@ function drawMSC(ctx, W, H, mscStr, aOld, aNew) {
   }
   ctx.stroke();
 
-  // shaded area
+  // shaded area under curve between aOld and aNew
   ctx.fillStyle = "rgba(74,127,181,0.25)";
   ctx.beginPath();
   ctx.moveTo(toX(aOld), toY(0));
@@ -247,7 +226,7 @@ function drawMSC(ctx, W, H, mscStr, aOld, aNew) {
   ctx.closePath();
   ctx.fill();
 
-  // dashed
+  // dashed lines
   ctx.setLineDash([5, 4]); ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
   [[aOld, mscOld], [aNew, mscNew]].forEach(([a, p]) => {
     ctx.beginPath(); ctx.moveTo(toX(a), toY(0)); ctx.lineTo(toX(a), toY(p)); ctx.stroke();
@@ -255,22 +234,47 @@ function drawMSC(ctx, W, H, mscStr, aOld, aNew) {
   });
   ctx.setLineDash([]);
 
+  // points
   ctx.fillStyle = "#222";
   [[aOld, mscOld], [aNew, mscNew]].forEach(([a, p]) => {
     ctx.beginPath(); ctx.arc(toX(a), toY(p), 4, 0, Math.PI * 2); ctx.fill();
   });
 
+  // FIX 1: IC label — positioned inside the shaded area
+  // Use the centroid of the region: x at midpoint, y at 1/3 of the curve height (lower = more inside)
   const ic = R(integrate(mscStr, varName, aOld, aNew));
-  ctx.font = "11px 'DM Mono', monospace";
-  ctx.fillStyle = "#4a7fb5";
-  ctx.fillText(`IC = ${ic}`, toX((aOld + aNew) / 2) - 20, toY((mscOld + mscNew) / 2) + 4);
+  const aMid = (aOld + aNew) / 2;
+  const mscAtMid = evalExpr(mscStr, varName, aMid);
+  // Place at ~35% of curve height at midpoint (0 = bottom/x-axis, mscAtMid = curve)
+  const labelPriceY = mscAtMid * 0.35;
+  ctx.font = "bold 12px 'DM Mono', monospace";
+  ctx.fillStyle = "#3a6a9e";
+  const icText = `IC = ${ic}`;
+  const textWidth = ctx.measureText(icText).width;
+  ctx.fillText(icText, toX(aMid) - textWidth / 2, toY(labelPriceY));
 
+  // axis labels
   ctx.font = "10px 'DM Mono', monospace";
   ctx.fillStyle = "#555";
   ctx.fillText(R(aOld, 1), toX(aOld) - 8, toY(0) + 14);
   ctx.fillText(R(aNew, 1), toX(aNew) - 8, toY(0) + 14);
+  ctx.fillText("A_old", toX(aOld) - 12, toY(0) + 26);
+  ctx.fillText("A_new", toX(aNew) - 12, toY(0) + 26);
   ctx.fillText(R(mscOld, 1), 10, toY(mscOld) + 4);
   ctx.fillText(R(mscNew, 1), 10, toY(mscNew) + 4);
+
+  // curve label
+  ctx.font = "11px 'DM Mono', monospace";
+  ctx.fillStyle = "#c0392b";
+  ctx.fillText("MSC", toX(aMax * 0.92) - 20, toY(evalExpr(mscStr, varName, aMax * 0.92)) - 8);
+
+  // y intercept
+  const y0 = evalExpr(mscStr, varName, 0);
+  ctx.fillStyle = "#222";
+  ctx.beginPath(); ctx.arc(toX(0), toY(y0), 3, 0, Math.PI * 2); ctx.fill();
+  ctx.font = "10px 'DM Mono', monospace";
+  ctx.fillStyle = "#555";
+  ctx.fillText(R(y0, 1), 10, toY(y0) + 4);
 
   ctx.font = "bold 13px 'DM Mono', monospace";
   ctx.fillStyle = "#222";
@@ -279,10 +283,60 @@ function drawMSC(ctx, W, H, mscStr, aOld, aNew) {
 
 // ─── Tabs ───
 const TABS = [
-  { id: "externality", label: "Externality", icon: "⚖️" },
-  { id: "abatement", label: "Abatement", icon: "🏭" },
-  { id: "time", label: "Time Value", icon: "⏳" },
+  { id: "externality", label: "Externality", icon: "\u2696\uFE0F" },
+  { id: "abatement", label: "Abatement", icon: "\uD83C\uDFED" },
+  { id: "time", label: "Time Value", icon: "\u23F3" },
 ];
+
+// ─── JSON Upload Component ───
+function JsonUpload({ onLoad, label }) {
+  const fileRef = useRef(null);
+  const [fileName, setFileName] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        onLoad(data);
+      } catch (err) {
+        setError("Invalid JSON file");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div style={{ marginBottom: 16, padding: 14, background: "#faf9f6", borderRadius: 8, border: "1.5px dashed #ccc" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "#666" }}>{label || "Load from JSON"}</span>
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{
+            padding: "6px 14px",
+            background: "#222",
+            color: "#f5f3ee",
+            border: "none",
+            borderRadius: 5,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 12,
+          }}
+        >
+          Choose File
+        </button>
+        {fileName && <span style={{ fontSize: 11, color: "#4a7fb5" }}>{"\u2713"} {fileName}</span>}
+        {error && <span style={{ fontSize: 11, color: "#c0392b" }}>{error}</span>}
+      </div>
+      <input ref={fileRef} type="file" accept=".json" onChange={handleFile} style={{ display: "none" }} />
+    </div>
+  );
+}
 
 // ─── Main App ───
 export default function App() {
@@ -421,6 +475,25 @@ function ExternalityPanel() {
 
   const set = (k) => (v) => setVars(prev => ({ ...prev, [k]: v }));
 
+  const handleJsonLoad = (data) => {
+    const source = data.variables || data;
+    const newVars = { ...vars };
+    for (const [key, val] of Object.entries(source)) {
+      if (val === "" || val === undefined || val === null) continue;
+      const strVal = String(val);
+      if (key === "MPB") {
+        newVars.MSB = strVal;
+      } else if (key === "MAC_MKT") {
+        newVars.MAC_1 = strVal;
+      } else if (key === "TAC" && !key.includes("_")) {
+        newVars.TAC_1 = strVal;
+      } else if (key in newVars) {
+        newVars[key] = strVal;
+      }
+    }
+    setVars(newVars);
+  };
+
   const derive = (v) => {
     const nv = { ...v };
     if (nv.MPC && nv.MEC && !nv.MSC) nv.MSC = `(${nv.MPC})+(${nv.MEC})`;
@@ -549,15 +622,16 @@ function ExternalityPanel() {
   return (
     <>
       <Card title="Equations">
+        <JsonUpload label="Upload preload.json (Externality)" onLoad={handleJsonLoad} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
           <Field label="MSB (demand)" value={vars.MSB} onChange={set("MSB")} placeholder="200-2Q" />
           <Field label="MPC (supply)" value={vars.MPC} onChange={set("MPC")} placeholder="20+2Q" />
           <Field label="MEC (externality)" value={vars.MEC} onChange={set("MEC")} placeholder="2Q" />
           <Field label="MSC (leave blank to derive)" value={vars.MSC} onChange={set("MSC")} placeholder="auto" />
-          <Field label="MAC₁" value={vars.MAC_1} onChange={set("MAC_1")} placeholder="optional" />
-          <Field label="MAC₂" value={vars.MAC_2} onChange={set("MAC_2")} placeholder="optional" />
-          <Field label="TAC₁" value={vars.TAC_1} onChange={set("TAC_1")} placeholder="optional" />
-          <Field label="TAC₂" value={vars.TAC_2} onChange={set("TAC_2")} placeholder="optional" />
+          <Field label="MAC_1" value={vars.MAC_1} onChange={set("MAC_1")} placeholder="optional" />
+          <Field label="MAC_2" value={vars.MAC_2} onChange={set("MAC_2")} placeholder="optional" />
+          <Field label="TAC_1" value={vars.TAC_1} onChange={set("TAC_1")} placeholder="optional" />
+          <Field label="TAC_2" value={vars.TAC_2} onChange={set("TAC_2")} placeholder="optional" />
         </div>
         <Field label="Total Abatement Standard (for cost-effective, TSB, savings)" value={totalAbatement} onChange={setTotalAbatement} placeholder="e.g. 100" />
       </Card>
@@ -617,6 +691,11 @@ function AbatementPanel() {
   const [graphFn, setGraphFn] = useState(null);
   const [graphType, setGraphType] = useState(null);
 
+  const handleJsonLoad = (data) => {
+    const source = data.variables || data;
+    if (source.MSC) setMsc(String(source.MSC));
+  };
+
   const compute = () => {
     const vn = findVariable(msc);
     const a1 = parseFloat(aOld), a2 = parseFloat(aNew);
@@ -644,10 +723,9 @@ function AbatementPanel() {
     const vn = findVariable(msc);
     const a1 = parseFloat(aOld), a2 = parseFloat(aNew);
     setGraphFn(() => (ctx, w, h) => {
-      // TSC = integral of MSC from 0 to A
       const aMax = a2 * 1.4;
       const tscMax = integrate(msc, vn, 0, aMax) * 1.3;
-      const mx = 80, my = 40, gw = w - mx - 30, gh = h - my - 60;
+      const mx = 80, my = 40, gw = w - mx - 50, gh = h - my - 60;
       const toX = (a) => mx + (a / aMax) * gw;
       const toY = (p) => my + gh - (p / tscMax) * gh;
 
@@ -674,34 +752,51 @@ function AbatementPanel() {
       const tscNew = integrate(msc, vn, 0, a2);
       const ic = R(tscNew - tscOld);
 
-      // points
+      // points on curve
+      ctx.fillStyle = "#222";
       [[a1, tscOld], [a2, tscNew]].forEach(([a, t]) => {
-        ctx.fillStyle = "#222";
         ctx.beginPath(); ctx.arc(toX(a), toY(t), 4, 0, Math.PI * 2); ctx.fill();
       });
 
-      // bracket
+      // FIX 2: Dashed lines — horizontal lines for BOTH tscOld and tscNew extend to A_new
       ctx.setLineDash([5, 4]); ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
-      [[a1, tscOld], [a2, tscNew]].forEach(([a, t]) => {
-        ctx.beginPath(); ctx.moveTo(toX(a), toY(0)); ctx.lineTo(toX(a), toY(t)); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(toX(0), toY(t)); ctx.lineTo(toX(a), toY(t)); ctx.stroke();
-      });
+
+      // Vertical at A_old
+      ctx.beginPath(); ctx.moveTo(toX(a1), toY(0)); ctx.lineTo(toX(a1), toY(tscOld)); ctx.stroke();
+      // Vertical at A_new
+      ctx.beginPath(); ctx.moveTo(toX(a2), toY(0)); ctx.lineTo(toX(a2), toY(tscNew)); ctx.stroke();
+
+      // Horizontal for TSC_old — extends from y-axis all the way past A_new to the bracket
+      const bx = toX(a2) + 16;
+      ctx.beginPath(); ctx.moveTo(toX(0), toY(tscOld)); ctx.lineTo(bx, toY(tscOld)); ctx.stroke();
+      // Horizontal for TSC_new — extends from y-axis to A_new and the bracket
+      ctx.beginPath(); ctx.moveTo(toX(0), toY(tscNew)); ctx.lineTo(bx, toY(tscNew)); ctx.stroke();
+
       ctx.setLineDash([]);
 
-      const bx = toX(a2) + 20;
+      // Right-side bracket showing IC
       ctx.strokeStyle = "#222"; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(bx, toY(tscOld)); ctx.lineTo(bx, toY(tscNew)); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(bx - 5, toY(tscOld)); ctx.lineTo(bx + 5, toY(tscOld)); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(bx - 5, toY(tscNew)); ctx.lineTo(bx + 5, toY(tscNew)); ctx.stroke();
 
-      ctx.font = "11px 'DM Mono', monospace";
+      // IC label
+      ctx.font = "bold 12px 'DM Mono', monospace";
       ctx.fillStyle = "#222";
       ctx.fillText(`IC = ${ic}`, bx + 10, (toY(tscOld) + toY(tscNew)) / 2 + 4);
 
+      // Curve label
+      ctx.font = "11px 'DM Mono', monospace";
+      ctx.fillStyle = "#c0392b";
+      ctx.fillText("TSC", toX(aMax * 0.9) - 10, toY(integrate(msc, vn, 0, aMax * 0.9, 200)) - 8);
+
+      // Axis labels
       ctx.font = "10px 'DM Mono', monospace";
       ctx.fillStyle = "#555";
       ctx.fillText(R(a1, 1), toX(a1) - 8, toY(0) + 14);
+      ctx.fillText("A_old", toX(a1) - 12, toY(0) + 26);
       ctx.fillText(R(a2, 1), toX(a2) - 8, toY(0) + 14);
+      ctx.fillText("A_new", toX(a2) - 12, toY(0) + 26);
       ctx.fillText(R(tscOld, 1), 10, toY(tscOld) + 4);
       ctx.fillText(R(tscNew, 1), 10, toY(tscNew) + 4);
 
@@ -715,6 +810,7 @@ function AbatementPanel() {
   return (
     <>
       <Card title="Marginal Social Cost of Abatement">
+        <JsonUpload label="Upload preload.json (Abatement)" onLoad={handleJsonLoad} />
         <Field label="MSC equation" value={msc} onChange={setMsc} placeholder="4+0.75A" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
           <Field label="A_old" value={aOld} onChange={setAOld} placeholder="e.g. 10" />
@@ -746,6 +842,24 @@ function TimePanel() {
   const [baseYear, setBaseYear] = useState("");
   const [results, setResults] = useState(null);
   const [mode, setMode] = useState(null);
+
+  const handleJsonLoad = (data) => {
+    const source = data.variables || data;
+    if (source.discount_rate) setDiscountRate(String(source.discount_rate));
+    if (source.start_year) setBaseYear(String(source.start_year));
+
+    const yearData = data.years || {};
+    if (Object.keys(yearData).length > 0) {
+      const newYears = Object.entries(yearData).map(([yr, vals]) => ({
+        year: parseInt(yr),
+        nominal: vals.nominal !== undefined ? vals.nominal : "",
+        cpi: vals.CPI !== undefined ? vals.CPI : (vals.cpi !== undefined ? vals.cpi : ""),
+        nrb: vals.nrb !== undefined ? vals.nrb : (vals.NRB !== undefined ? vals.NRB : ""),
+      }));
+      newYears.sort((a, b) => a.year - b.year);
+      setYears(newYears);
+    }
+  };
 
   const addYear = () => {
     const lastYear = years.length > 0 ? years[years.length - 1].year + 1 : 2020;
@@ -823,6 +937,7 @@ function TimePanel() {
   return (
     <>
       <Card title="Year Data">
+        <JsonUpload label="Upload preload.json (Time Value)" onLoad={handleJsonLoad} />
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -846,7 +961,7 @@ function TimePanel() {
                     </td>
                   ))}
                   <td style={{ padding: 4 }}>
-                    <button onClick={() => removeYear(i)} style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", fontSize: 16 }}>×</button>
+                    <button onClick={() => removeYear(i)} style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", fontSize: 16 }}>{"\u00D7"}</button>
                   </td>
                 </tr>
               ))}
@@ -865,7 +980,7 @@ function TimePanel() {
 
       <Card title="Operations">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          <Btn onClick={convertNominalToReal} disabled={years.length < 2 || !years[0].cpi}>Nominal → Real</Btn>
+          <Btn onClick={convertNominalToReal} disabled={years.length < 2 || !years[0].cpi}>{`Nominal \u2192 Real`}</Btn>
           <Btn onClick={computeGrowthRate} disabled={!results || results.type !== "nominal_to_real"} secondary>Growth Rate</Btn>
           <Btn onClick={buildPVTable} disabled={years.length < 1 || !discountRate}>PV Table</Btn>
           <Btn onClick={computePVNB} disabled={years.length < 1 || !discountRate || !years[0].nrb}>PVNB</Btn>
@@ -899,7 +1014,7 @@ function TimePanel() {
           </div>
           {results.growth !== undefined && (
             <div style={{ marginTop: 12, padding: 12, background: "#faf9f6", borderRadius: 6, fontSize: 13 }}>
-              Growth Rate ({results.growthFrom}→{results.growthTo}): <strong>{results.growth}%</strong>
+              Growth Rate ({results.growthFrom}{"\u2192"}{results.growthTo}): <strong>{results.growth}%</strong>
             </div>
           )}
         </Card>
