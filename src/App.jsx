@@ -20,7 +20,7 @@ function evalExpr(exprStr, varName, value) {
 
 function findVariable(exprStr) {
   const parsed = parseExpr(exprStr);
-  const vars = parsed.match(/[A-Za-z_]+/g) || [];
+  const vars = parsed.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
   const reserved = new Set(["Math", "PI", "E", "abs", "sqrt", "pow", "log", "exp", "sin", "cos", "tan", "max", "min", "round", "floor", "ceil", "return"]);
   const unique = [...new Set(vars.filter(v => !reserved.has(v)))];
   return unique[0] || "Q";
@@ -62,10 +62,14 @@ function integrate(exprStr, varName, lo, hi, n = 1000) {
 function solveTwoEq(mac1Str, mac2Str, var1, var2, total) {
   const f = (a1) => evalExpr(mac1Str, var1, a1) - evalExpr(mac2Str, var2, total - a1);
   let lo = 0, hi = total;
+  let flo = f(lo);
   for (let i = 0; i < 100; i++) {
     const mid = (lo + hi) / 2;
-    if (f(mid) < 0) lo = mid;
-    else hi = mid;
+    const fm = f(mid);
+    if (Math.abs(fm) < 1e-10) { lo = hi = mid; break; }
+    // keep the subinterval that brackets the sign change
+    if (flo * fm < 0) { hi = mid; }
+    else { lo = mid; flo = fm; }
   }
   const a1 = (lo + hi) / 2;
   return { [var1]: a1, [var2]: total - a1 };
@@ -633,12 +637,12 @@ function ExternalityPanel() {
     const total = parseFloat(totalAbatement);
     const sol = solveTwoEq(dv.MAC_1, dv.MAC_2, v1, v2, total);
     const equal = total / 2;
-    const tv1 = findVariable(dv.TAC_1);
-    const tv2 = findVariable(dv.TAC_2);
-    const tac1_opt = evalExpr(dv.TAC_1, tv1, sol[v1]);
-    const tac2_opt = evalExpr(dv.TAC_2, tv2, sol[v2]);
-    const tac1_eq = evalExpr(dv.TAC_1, tv1, equal);
-    const tac2_eq = evalExpr(dv.TAC_2, tv2, equal);
+    // TAC_i and MAC_i refer to the same firm, so evaluate TAC_i against v_i
+    // (not a freshly-detected name — that breaks silently if letters differ)
+    const tac1_opt = evalExpr(dv.TAC_1, v1, sol[v1]);
+    const tac2_opt = evalExpr(dv.TAC_2, v2, sol[v2]);
+    const tac1_eq = evalExpr(dv.TAC_1, v1, equal);
+    const tac2_eq = evalExpr(dv.TAC_2, v2, equal);
     const withT = tac1_opt + tac2_opt;
     const withoutT = tac1_eq + tac2_eq;
     setResults({
