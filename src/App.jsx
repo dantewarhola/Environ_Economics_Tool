@@ -20,7 +20,7 @@ function evalExpr(exprStr, varName, value) {
 
 function findVariable(exprStr) {
   const parsed = parseExpr(exprStr);
-  const vars = parsed.match(/[A-Za-z_]+/g) || [];
+  const vars = parsed.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
   const reserved = new Set(["Math", "PI", "E", "abs", "sqrt", "pow", "log", "exp", "sin", "cos", "tan", "max", "min", "round", "floor", "ceil", "return"]);
   const unique = [...new Set(vars.filter(v => !reserved.has(v)))];
   return unique[0] || "Q";
