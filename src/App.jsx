@@ -919,21 +919,27 @@ function AbatementPanel() {
 // ─── Time Value Panel ───
 function TimePanel() {
   const [years, setYears] = useState([
-    { year: "", nominal: "", cpi: "", nrb: "" },
-    { year: "", nominal: "", cpi: "", nrb: "" },
+    { year: "", nominal: "", cpi: "", nrb: "", benefit: "", cost: "" },
+    { year: "", nominal: "", cpi: "", nrb: "", benefit: "", cost: "" },
   ]);
   const [discountRate, setDiscountRate] = useState("");
+  const [inflationRate, setInflationRate] = useState("");
   const [baseYear, setBaseYear] = useState("");
+  const [pvFV, setPvFV] = useState("");
+  const [pvRate, setPvRate] = useState("");
+  const [pvT, setPvT] = useState("");
+  const [pvResult, setPvResult] = useState(null);
   const [results, setResults] = useState(null);
   const [mode, setMode] = useState(null);
 
   const handleJsonLoad = (data) => {
     const source = data.variables || data;
-    // reset first so old values don't linger across uploads
     setDiscountRate(source.discount_rate !== undefined ? String(source.discount_rate) : "");
+    setInflationRate(source.inflation_rate !== undefined ? String(source.inflation_rate) : "");
     setBaseYear(source.start_year !== undefined ? String(source.start_year) : "");
     setResults(null);
     setMode(null);
+    setPvResult(null);
 
     const yearData = data.years || {};
     if (Object.keys(yearData).length > 0) {
@@ -942,6 +948,8 @@ function TimePanel() {
         nominal: vals.nominal !== undefined ? vals.nominal : "",
         cpi: vals.CPI !== undefined ? vals.CPI : (vals.cpi !== undefined ? vals.cpi : ""),
         nrb: vals.nrb !== undefined ? vals.nrb : (vals.NRB !== undefined ? vals.NRB : ""),
+        benefit: vals.benefit !== undefined ? vals.benefit : "",
+        cost: vals.cost !== undefined ? vals.cost : "",
       }));
       newYears.sort((a, b) => a.year - b.year);
       setYears(newYears);
@@ -950,7 +958,7 @@ function TimePanel() {
 
   const addYear = () => {
     const lastYear = years.length > 0 ? years[years.length - 1].year + 1 : 2020;
-    setYears([...years, { year: lastYear, nominal: "", cpi: "", nrb: "" }]);
+    setYears([...years, { year: lastYear, nominal: "", cpi: "", nrb: "", benefit: "", cost: "" }]);
   };
   const removeYear = (i) => setYears(years.filter((_, j) => j !== i));
   const updateYear = (i, field, val) => {
@@ -960,12 +968,22 @@ function TimePanel() {
   };
 
   const convertNominalToReal = () => {
-    const r = parseFloat(discountRate);
     const by = parseInt(baseYear) || years[0]?.year;
     const sortedYears = [...years].sort((a, b) => a.year - b.year);
-    const first = sortedYears[0], last = sortedYears[sortedYears.length - 1];
-    const cpiFirst = parseFloat(first.cpi), cpiLast = parseFloat(last.cpi);
-    const p = (cpiLast - cpiFirst) / cpiFirst;
+
+    let p;
+    let source;
+    if (inflationRate) {
+      // Direct inflation rate provided (e.g. 0.05 for 5%)
+      p = parseFloat(inflationRate);
+      source = "direct";
+    } else {
+      // Derive from CPI values
+      const first = sortedYears[0], last = sortedYears[sortedYears.length - 1];
+      const cpiFirst = parseFloat(first.cpi), cpiLast = parseFloat(last.cpi);
+      p = (cpiLast - cpiFirst) / cpiFirst;
+      source = "cpi";
+    }
 
     const rows = sortedYears.map(y => {
       const t = y.year - by;
@@ -973,7 +991,7 @@ function TimePanel() {
       return { ...y, t, real, p };
     });
 
-    setResults({ type: "nominal_to_real", rows, inflationRate: R(p * 100), baseYear: by });
+    setResults({ type: "nominal_to_real", rows, inflationRate: R(p * 100), baseYear: by, inflationSource: source });
     setMode("real");
   };
 
@@ -988,19 +1006,22 @@ function TimePanel() {
 
   const buildPVTable = () => {
     const r = parseFloat(discountRate);
+    const p = inflationRate ? parseFloat(inflationRate) : 0;
     const sortedYears = [...years].sort((a, b) => a.year - b.year);
     const by = sortedYears[0].year;
     let totalPV = 0;
     const rows = sortedYears.map(y => {
       const t = y.year - by;
       const nom = parseFloat(y.nominal);
+      // Step 1: inflation correction — nominal to real
+      const realVal = R(nom / (1 + p) ** t);
+      // Step 2: discounting — real to present value
       const df = R(1 / (1 + r) ** t);
-      const realFV = R(nom * df);
-      const pv = R(realFV * df);
+      const pv = R(realVal * df);
       totalPV += pv;
-      return { ...y, t, df, realFV, pv };
+      return { ...y, t, realVal, df, pv };
     });
-    setResults({ type: "pv_table", rows, totalPV: R(totalPV), r });
+    setResults({ type: "pv_table", rows, totalPV: R(totalPV), r, p });
     setMode("pv");
   };
 
@@ -1021,6 +1042,46 @@ function TimePanel() {
     setMode("pvnb");
   };
 
+  const computePVSingle = () => {
+    const fv = parseFloat(pvFV);
+    const r = parseFloat(pvRate);
+    const t = parseFloat(pvT);
+    if (isNaN(fv) || isNaN(r) || isNaN(t)) return;
+    const pv = R(fv / (1 + r) ** t);
+    setPvResult({ fv, r, t, pv });
+  };
+
+  const computeBCA = () => {
+    const r = parseFloat(discountRate);
+    const p = inflationRate ? parseFloat(inflationRate) : 0;
+    const sortedYears = [...years].sort((a, b) => a.year - b.year);
+    const by = sortedYears[0].year;
+    let totalPVB = 0;
+    let totalPVC = 0;
+    const rows = sortedYears.map(y => {
+      const t = y.year - by;
+      const nomB = parseFloat(y.benefit) || 0;
+      const nomC = parseFloat(y.cost) || 0;
+      // Step 1: inflation correction
+      const realB = R(nomB / (1 + p) ** t);
+      const realC = R(nomC / (1 + p) ** t);
+      // Step 2: discounting
+      const df = R(1 / (1 + r) ** t);
+      const pvB = R(realB * df);
+      const pvC = R(realC * df);
+      totalPVB += pvB;
+      totalPVC += pvC;
+      return { ...y, t, realB, realC, df, pvB, pvC };
+    });
+    const pvnb = R(totalPVB - totalPVC);
+    const bcr = totalPVC !== 0 ? R(totalPVB / totalPVC) : "N/A";
+    const feasible = totalPVB >= totalPVC;
+    setResults({ type: "bca", rows, totalPVB: R(totalPVB), totalPVC: R(totalPVC), pvnb, bcr, feasible, r, p });
+    setMode("bca");
+  };
+
+  const hasBenefitCost = years.some(y => y.benefit || y.cost);
+
   return (
     <>
       <Card title="Year Data">
@@ -1029,7 +1090,7 @@ function TimePanel() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #e5e2db" }}>
-                {["Year", "Nominal", "CPI", "NRB", ""].map(h => (
+                {["Year", "Nominal", "CPI", "NRB", "Benefit", "Cost", ""].map(h => (
                   <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontWeight: 500, color: "#666", fontSize: 11 }}>{h}</th>
                 ))}
               </tr>
@@ -1037,7 +1098,7 @@ function TimePanel() {
             <tbody>
               {years.map((y, i) => (
                 <tr key={i} style={{ borderBottom: "1px solid #f0ede6" }}>
-                  {["year", "nominal", "cpi", "nrb"].map(f => (
+                  {["year", "nominal", "cpi", "nrb", "benefit", "cost"].map(f => (
                     <td key={f} style={{ padding: 4 }}>
                       <input
                         type="text"
@@ -1059,19 +1120,38 @@ function TimePanel() {
       </Card>
 
       <Card title="Parameters">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-          <Field label="Discount Rate" value={discountRate} onChange={setDiscountRate} placeholder="0.05" />
-          <Field label="Base Year (for real conversion)" value={baseYear} onChange={setBaseYear} placeholder="e.g. 2011" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+          <Field label="Discount Rate (r)" value={discountRate} onChange={setDiscountRate} placeholder="0.10" />
+          <Field label="Inflation Rate (p)" value={inflationRate} onChange={setInflationRate} placeholder="0.05" />
+          <Field label="Base Year" value={baseYear} onChange={setBaseYear} placeholder="e.g. 2011" />
         </div>
       </Card>
 
       <Card title="Operations">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          <Btn onClick={convertNominalToReal} disabled={years.length < 2 || !years[0].cpi}>{`Nominal \u2192 Real`}</Btn>
+          <Btn onClick={convertNominalToReal} disabled={years.length < 2 || (!years[0].cpi && !inflationRate)}>{`Nominal \u2192 Real`}</Btn>
           <Btn onClick={computeGrowthRate} disabled={!results || results.type !== "nominal_to_real"} secondary>Growth Rate</Btn>
           <Btn onClick={buildPVTable} disabled={years.length < 1 || !discountRate}>PV Table</Btn>
           <Btn onClick={computePVNB} disabled={years.length < 1 || !discountRate || !years[0].nrb}>PVNB</Btn>
+          <Btn onClick={computeBCA} disabled={years.length < 1 || !discountRate || !hasBenefitCost}>BCA (PVB/PVC)</Btn>
         </div>
+      </Card>
+
+      <Card title="PV of Single Future Amount">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+          <Field label="Future Value (FV)" value={pvFV} onChange={setPvFV} placeholder="e.g. 500" />
+          <Field label="Discount Rate (r)" value={pvRate} onChange={setPvRate} placeholder="e.g. 0.08" />
+          <Field label="Periods (t)" value={pvT} onChange={setPvT} placeholder="e.g. 3" />
+        </div>
+        <Btn onClick={computePVSingle} disabled={!pvFV || !pvRate || !pvT}>Calculate PV</Btn>
+        {pvResult && (
+          <div style={{ marginTop: 12, padding: 14, background: "#faf9f6", borderRadius: 6, fontSize: 13 }}>
+            <ResultRow label="FV" value={pvResult.fv} />
+            <ResultRow label="r" value={pvResult.r} />
+            <ResultRow label="t" value={pvResult.t} />
+            <ResultRow label={`PV = ${pvResult.fv} / (1+${pvResult.r})^${pvResult.t}`} value={pvResult.pv} />
+          </div>
+        )}
       </Card>
 
       {results && results.type === "nominal_to_real" && (
@@ -1109,11 +1189,13 @@ function TimePanel() {
 
       {results && results.type === "pv_table" && (
         <Card title="Present Value Table">
-          <div style={{ overflowX: "auto" }}>
+          {results.p > 0 && <ResultRow label="Inflation Rate (p)" value={R(results.p * 100) + "%"} />}
+          <ResultRow label="Discount Rate (r)" value={R(results.r * 100) + "%"} />
+          <div style={{ overflowX: "auto", marginTop: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #e5e2db" }}>
-                  {["Year", "Nominal", "Discount Factor", "Real (FV)", "PV"].map(h => (
+                  {["Year", "Nominal", "Real (÷(1+p)^t)", "Discount Factor", "PV"].map(h => (
                     <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontWeight: 500, color: "#666", fontSize: 11 }}>{h}</th>
                   ))}
                 </tr>
@@ -1123,8 +1205,8 @@ function TimePanel() {
                   <tr key={i} style={{ borderBottom: "1px solid #f0ede6" }}>
                     <td style={{ padding: "6px" }}>{r.year}</td>
                     <td style={{ padding: "6px" }}>{r.nominal}</td>
+                    <td style={{ padding: "6px" }}>{r.realVal}</td>
                     <td style={{ padding: "6px" }}>{r.df}</td>
-                    <td style={{ padding: "6px" }}>{r.realFV}</td>
                     <td style={{ padding: "6px", fontWeight: 500 }}>{r.pv}</td>
                   </tr>
                 ))}
@@ -1159,6 +1241,57 @@ function TimePanel() {
             </table>
           </div>
           <ResultRow label="Total PVNB" value={results.totalPVNB} />
+        </Card>
+      )}
+
+      {results && results.type === "bca" && (
+        <Card title="Benefit-Cost Analysis">
+          {results.p > 0 && <ResultRow label="Inflation Rate (p)" value={R(results.p * 100) + "%"} />}
+          <ResultRow label="Discount Rate (r)" value={R(results.r * 100) + "%"} />
+          <div style={{ overflowX: "auto", marginTop: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e5e2db" }}>
+                  {["Year", "Nom. Benefit", "Nom. Cost", "Real Benefit", "Real Cost", "DF", "PV Benefit", "PV Cost"].map(h => (
+                    <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontWeight: 500, color: "#666", fontSize: 11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.rows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #f0ede6" }}>
+                    <td style={{ padding: "6px" }}>{r.year}</td>
+                    <td style={{ padding: "6px" }}>{r.benefit}</td>
+                    <td style={{ padding: "6px" }}>{r.cost}</td>
+                    <td style={{ padding: "6px" }}>{r.realB}</td>
+                    <td style={{ padding: "6px" }}>{r.realC}</td>
+                    <td style={{ padding: "6px" }}>{r.df}</td>
+                    <td style={{ padding: "6px", fontWeight: 500, color: "#2d7d46" }}>{r.pvB}</td>
+                    <td style={{ padding: "6px", fontWeight: 500, color: "#c0392b" }}>{r.pvC}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <ResultRow label="PVB (Total)" value={results.totalPVB} />
+            <ResultRow label="PVC (Total)" value={results.totalPVC} />
+            <ResultRow label="PVNB = PVB − PVC" value={results.pvnb} />
+            <ResultRow label="BCR = PVB / PVC" value={results.bcr} />
+            <div style={{
+              marginTop: 10,
+              padding: "10px 14px",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              background: results.feasible ? "#e8f5e9" : "#fce4ec",
+              color: results.feasible ? "#2e7d32" : "#c62828",
+            }}>
+              {results.feasible
+                ? `\u2713 Feasible — PVNB > 0 and BCR > 1`
+                : `\u2717 Not Feasible — PVNB < 0 and BCR < 1`}
+            </div>
+          </div>
         </Card>
       )}
     </>
