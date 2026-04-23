@@ -1,8 +1,5 @@
 <p align="center">
 
-<!-- IMAGE: Hero banner — a wide screenshot of the full application landing page showing the "Env Econ Toolkit" title, subtitle "Externalities, abatement costs, present value — all in one place.", and the three navigation tabs (Externality, Abatement, Time Value). Capture at desktop width (~820px content area) with the warm cream background visible. -->
-![Env Econ Toolkit — Landing Page](screenshots/hero-banner.png)
-
 </p>
 
 # Env Econ Toolkit
