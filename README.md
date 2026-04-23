@@ -236,27 +236,19 @@ Aliases supported: `MPB` maps to MSB, `MAC_MKT` maps to MAC_1.
 ```json
 {
   "variables": {
-    "discount_rate": 0.10,
-    "inflation_rate": 0.05,
+    "discount_rate": 0.08,
+    "inflation_rate": 0.03,
     "start_year": 2020
   },
   "years": {
-    "2020": { "nominal": 1000, "CPI": 100, "benefit": 500, "cost": 200 },
-    "2021": { "nominal": 1100, "CPI": 105, "benefit": 600, "cost": 250 },
-    "2022": { "nominal": 1200, "CPI": 110, "benefit": 700, "cost": 300 }
+    "2020": { "nominal": 5000, "CPI": 100, "nrb": 800, "benefit": 3000, "cost": 2200 },
+    "2021": { "nominal": 5500, "CPI": 103, "nrb": 900, "benefit": 3500, "cost": 2400 },
+    "2022": { "nominal": 6100, "CPI": 106.09, "nrb": 1000, "benefit": 4000, "cost": 2600 },
+    "2023": { "nominal": 6800, "CPI": 109.27, "nrb": 1100, "benefit": 4500, "cost": 2800 },
+    "2024": { "nominal": 7500, "CPI": 112.55, "nrb": 1200, "benefit": 5000, "cost": 3000 }
   }
 }
 ```
-
-<!-- IMAGE: Screenshot showing the JSON upload area — the dashed-border box with the text "Upload preload.json (Externality)" and a dark "Choose File" button. Show a state where a file has been loaded successfully, with the green checkmark and filename "problem3.json" visible next to the button. -->
-![JSON upload — load problem data from a file](screenshots/tv-json-upload.png)
-
-![JSON upload — load problem data from a file](screenshots/externality-json-upload.png)
-
-![JSON upload — load problem data from a file](screenshots/abate-json-upload.png)
-
-![JSON upload — load problem data from a file](screenshots/pv-json-upload.png)
-
 ---
 
 ## Equation Syntax
