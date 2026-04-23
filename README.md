@@ -133,7 +133,9 @@ The Abatement tab focuses on marginal and total social cost curves for pollution
 **Graph TSC** — Renders the total social cost curve (the integral of MSC from 0 to A) with a right-side bracket showing the incremental cost between the two abatement levels.
 
 <!-- IMAGE: Side-by-side screenshots (or stacked vertically) of the MSC graph and the TSC graph. The MSC graph should show an upward-sloping line labeled "MSC" in red, with a blue-shaded area between A_old and A_new, dashed lines from each point to both axes, and "IC = [value]" labeled inside the shaded area. The title reads "MSC: Incremental Cost". The TSC graph should show a convex curve labeled "TSC" in red, two points on the curve at A_old and A_new, dashed lines extending to a right-side bracket, and "IC = [value]" next to the bracket. The title reads "TSC: Incremental Cost". -->
-![MSC and TSC graphs showing incremental abatement cost](screenshots/abatement-graphs.png)
+![MSC and TSC graphs showing incremental abatement cost](screenshots/msc-graph.png)
+
+![MSC and TSC graphs showing incremental abatement cost](screenshots/tsc-graph.png)
 
 ---
 
@@ -250,7 +252,13 @@ Aliases supported: `MPB` maps to MSB, `MAC_MKT` maps to MAC_1.
 ```
 
 <!-- IMAGE: Screenshot showing the JSON upload area — the dashed-border box with the text "Upload preload.json (Externality)" and a dark "Choose File" button. Show a state where a file has been loaded successfully, with the green checkmark and filename "problem3.json" visible next to the button. -->
-![JSON upload — load problem data from a file](screenshots/json-upload.png)
+![JSON upload — load problem data from a file](screenshots/tv-json-upload.png)
+
+![JSON upload — load problem data from a file](screenshots/externality-json-upload.png)
+
+![JSON upload — load problem data from a file](screenshots/abate-json-upload.png)
+
+![JSON upload — load problem data from a file](screenshots/pv-json-upload.png)
 
 ---
 
