@@ -1,0 +1,15 @@
+{
+    "variables": {
+        "discount_rate": "0.10",
+        "inflation_rate": "0.05",
+        "start_year": "0"
+    },
+    "years": {
+        "0": { "benefit": 0,    "cost": 500 },
+        "1": { "benefit": 300,  "cost": 50 },
+        "2": { "benefit": 300,  "cost": 50 },
+        "3": { "benefit": 300,  "cost": 50 },
+        "4": { "benefit": 300,  "cost": 50 },
+        "5": { "benefit": 300,  "cost": 50 }
+    }
+}

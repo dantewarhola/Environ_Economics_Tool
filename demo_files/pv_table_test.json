@@ -1,0 +1,14 @@
+{
+  "variables": {
+    "discount_rate": 0.08,
+    "inflation_rate": 0.03,
+    "start_year": 2020
+  },
+  "years": {
+    "2020": { "nominal": 5000, "CPI": 100, "nrb": 800, "benefit": 3000, "cost": 2200 },
+    "2021": { "nominal": 5500, "CPI": 103, "nrb": 900, "benefit": 3500, "cost": 2400 },
+    "2022": { "nominal": 6100, "CPI": 106.09, "nrb": 1000, "benefit": 4000, "cost": 2600 },
+    "2023": { "nominal": 6800, "CPI": 109.27, "nrb": 1100, "benefit": 4500, "cost": 2800 },
+    "2024": { "nominal": 7500, "CPI": 112.55, "nrb": 1200, "benefit": 5000, "cost": 3000 }
+  }
+}

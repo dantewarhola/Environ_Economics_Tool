@@ -1,0 +1,14 @@
+{
+  "variables": {
+    "MSB": "200-2Q",
+    "MPC": "20+2Q",
+    "MEC": "2Q",
+    "MAC_1": "4A",
+    "MAC_2": "2A",
+    "TAC_1": "2A^2",
+    "TAC_2": "A^2",
+    "total_abatement": 100,
+    "tsb_lower": 0,
+    "tsb_upper": 30
+  }
+}
