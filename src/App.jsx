@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { Analytics } from "@vercel/analytics/react";
 
 // ─── Sympy-lite: tiny symbolic math via math.js-style eval ───
 
@@ -1294,6 +1295,7 @@ function TimePanel() {
           </div>
         </Card>
       )}
+      <Analytics />
     </>
   );
 }
