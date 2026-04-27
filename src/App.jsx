@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { Analytics } from '@vercel/analytics/react';
 
 // ─── Sympy-lite: tiny symbolic math via math.js-style eval ───
 
@@ -412,6 +413,7 @@ export default function App() {
       <footer style={{ textAlign: "center", padding: "24px 16px", color: "#999", fontSize: 11 }}>
         Environmental Economics Calculator — Built for academic use
       </footer>
+      <Analytics />
     </div>
   );
 }
